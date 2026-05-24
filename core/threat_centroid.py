@@ -1,14 +1,17 @@
 # core/threat_centroid.py
 # Centroid-based malicious intent detection.
-# Computes a single centroid vector from threat anchors at import time
-# for efficient per-prompt similarity scoring.
+# Computes a single centroid vector from threat anchors on first use
+# (lazy initialization — NOT at module import time, to allow CI mocking).
 
 import json
 import os
-from core.embeddings import get_embedding, cosine_similarity
 
 
 POLICY_FILE = "policies.json"
+
+# Lazy state
+_threat_centroid_cache = None
+_threat_centroid_initialized = False
 
 
 def load_threat_anchors():
@@ -32,6 +35,7 @@ def build_malicious_centroid(anchors):
     Compute the centroid (element-wise average) of all threat anchor embeddings.
     Returns the centroid vector, or None if no valid embeddings.
     """
+    from core.embeddings import get_embedding  # lazy import — avoids CI failure
     if not anchors:
         return None
 
@@ -39,7 +43,6 @@ def build_malicious_centroid(anchors):
     for anchor in anchors:
         vec = get_embedding(anchor)
         if vec is not None:
-            # Ensure plain list
             if hasattr(vec, "tolist"):
                 vec = vec.tolist()
             vectors.append(vec)
@@ -47,7 +50,6 @@ def build_malicious_centroid(anchors):
     if not vectors:
         return None
 
-    # Element-wise average
     dim = len(vectors[0])
     centroid = [0.0] * dim
     for vec in vectors:
@@ -60,20 +62,26 @@ def build_malicious_centroid(anchors):
     return centroid
 
 
+def _get_malicious_centroid():
+    """Returns the malicious centroid, computing it once on first call."""
+    global _threat_centroid_cache, _threat_centroid_initialized
+    if not _threat_centroid_initialized:
+        anchors = load_threat_anchors()
+        _threat_centroid_cache = build_malicious_centroid(anchors)
+        _threat_centroid_initialized = True
+    return _threat_centroid_cache
+
+
 def compute_centroid_similarity(prompt_vec):
     """
     Compute cosine similarity between prompt and the malicious centroid.
     Returns 0.0 if centroid is unavailable.
     """
-    if MALICIOUS_CENTROID is None:
+    from core.embeddings import cosine_similarity  # lazy import
+    centroid = _get_malicious_centroid()
+    if centroid is None:
         return 0.0
     if prompt_vec is None:
         return 0.0
-    # Ensure plain list
     pv = prompt_vec.tolist() if hasattr(prompt_vec, "tolist") else prompt_vec
-    return cosine_similarity(pv, MALICIOUS_CENTROID)
-
-
-# --- MODULE-LEVEL PRECOMPUTATION (runs once at import) ---
-_threat_anchors = load_threat_anchors()
-MALICIOUS_CENTROID = build_malicious_centroid(_threat_anchors)
+    return cosine_similarity(pv, centroid)

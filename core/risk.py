@@ -36,9 +36,17 @@ EDUCATIONAL_CONTEXT_ANCHORS = [
     "simulating attack vectors for defensive analysis"
 ]
 
-# Initialize FAISS indexes
-threat_store.add_texts(THREAT_ANCHORS)
-educational_store.add_texts(EDUCATIONAL_CONTEXT_ANCHORS)
+# FAISS indexes are populated lazily on first call to assess_risk()
+# to avoid sentence_transformers import at module load time (breaks CI mocking).
+_faiss_initialized = False
+
+def _ensure_faiss_initialized():
+    """Populates FAISS indexes once on first use."""
+    global _faiss_initialized
+    if not _faiss_initialized:
+        threat_store.add_texts(THREAT_ANCHORS)
+        educational_store.add_texts(EDUCATIONAL_CONTEXT_ANCHORS)
+        _faiss_initialized = True
 
 # --- 2. SYMBOLIC RULES (from centralized policy loader) ---
 from core.policy_loader import get_jailbreak_patterns, get_hard_ban_keywords
@@ -62,6 +70,10 @@ def check_symbolic_violations(prompt: str) -> str:
 # --- 2.5. SEMANTIC META-INTENT DETECTION ---
 META_INTENT_FILE = "policies/meta_intent_anchors.json"
 
+# META_INTENT_VECTORS is lazy-initialized on first use (same reason as FAISS above)
+_meta_intent_vectors_cache = None
+_meta_intent_initialized = False
+
 def _load_meta_intent_vectors():
     """Loads meta-intent anchors and precomputes their embeddings.
     Returns list of (text, vector) tuples, or empty list if file missing."""
@@ -83,15 +95,22 @@ def _load_meta_intent_vectors():
         logger.warning(f"Failed to load meta-intent anchors: {e}")
         return []
 
-META_INTENT_VECTORS = _load_meta_intent_vectors()
+def _get_meta_intent_vectors():
+    """Returns meta-intent vectors, computing them once on first call."""
+    global _meta_intent_vectors_cache, _meta_intent_initialized
+    if not _meta_intent_initialized:
+        _meta_intent_vectors_cache = _load_meta_intent_vectors()
+        _meta_intent_initialized = True
+    return _meta_intent_vectors_cache
 
 def check_meta_intent(prompt_vec) -> float:
     """Computes max similarity between prompt and meta-intent anchors.
     Returns the max similarity score, or 0.0 if no anchors loaded."""
-    if not META_INTENT_VECTORS:
+    vectors = _get_meta_intent_vectors()
+    if not vectors:
         return 0.0
     max_score = 0.0
-    for intent_text, intent_vec in META_INTENT_VECTORS:
+    for intent_text, intent_vec in vectors:
         score = cosine_similarity(prompt_vec, intent_vec)
         if score > max_score:
             max_score = score
@@ -255,10 +274,14 @@ def assess_risk(prompt: str) -> tuple:
         Stage 5: Cache save + return
     """
 
+    # ---- INIT: Ensure FAISS indexes are populated (lazy, once only) ----
+    _ensure_faiss_initialized()
+
     # ---- STAGE 0: CACHE CHECK ----
     prompt_vec = get_embedding(prompt)
     cached_risk, cached_score = lookup_cache(prompt_vec)
     if cached_risk:
+
         # SAFETY: Never downgrade a HIGH-risk cached decision
         if cached_risk == "HIGH":
             logger.info(f"⚡ CACHE HIT (LOCKED HIGH) — cached HIGH cannot be downgraded.")

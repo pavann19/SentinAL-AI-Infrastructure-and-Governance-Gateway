@@ -1,7 +1,6 @@
 # core/domain_classifier.py
 import json
 import os
-from core.embeddings import get_embedding, cosine_similarity
 from core.config import DOMAIN_THRESHOLD
 
 DOMAIN_CORPUS_FILE = "policies/domain_corpus.json"
@@ -23,19 +22,18 @@ def _load_domain_corpus():
 def _compute_centroid(documents):
     """Computes the average embedding (centroid) from a list of documents.
     Returns the centroid vector, or None if no documents provided."""
+    from core.embeddings import get_embedding  # lazy import — avoids CI failure
     if not documents:
         return None
     embeddings = []
     for doc in documents:
         vec = get_embedding(doc)
         if vec is not None:
-            # Convert tensor to list if needed
             if hasattr(vec, 'tolist'):
                 vec = vec.tolist()
             embeddings.append(vec)
     if not embeddings:
         return None
-    # Compute element-wise average
     dim = len(embeddings[0])
     centroid = [0.0] * dim
     for vec in embeddings:
@@ -45,12 +43,21 @@ def _compute_centroid(documents):
         centroid[i] /= len(embeddings)
     return centroid
 
-# --- Precompute centroid at module import ---
-_corpus_documents = _load_domain_corpus()
-DOMAIN_CENTROID = _compute_centroid(_corpus_documents)
+# --- Lazy centroid: computed on first use, NOT at module import ---
+_corpus_documents = None
+_domain_centroid_cache = None
+_centroid_initialized = False
 
-if DOMAIN_CENTROID is None:
-    print("WARNING: Domain centroid not computed. Domain check will default to allow.")
+def _get_domain_centroid():
+    """Returns the domain centroid, computing it once on first call."""
+    global _corpus_documents, _domain_centroid_cache, _centroid_initialized
+    if not _centroid_initialized:
+        _corpus_documents = _load_domain_corpus()
+        _domain_centroid_cache = _compute_centroid(_corpus_documents)
+        if _domain_centroid_cache is None:
+            print("WARNING: Domain centroid not computed. Domain check will default to allow.")
+        _centroid_initialized = True
+    return _domain_centroid_cache
 
 def is_domain_aligned(prompt: str) -> tuple:
     """
@@ -58,20 +65,19 @@ def is_domain_aligned(prompt: str) -> tuple:
     using centroid-based similarity.
     Returns: (bool, float) — (is_aligned, similarity_score)
     """
+    from core.embeddings import get_embedding, cosine_similarity  # lazy import
+    centroid = _get_domain_centroid()
+
     # If centroid unavailable, default to allow (avoid system crash)
-    if DOMAIN_CENTROID is None:
+    if centroid is None:
         return True, 1.0
 
     prompt_vec = get_embedding(prompt)
     if prompt_vec is None:
         return True, 1.0
 
-    # Convert tensor to list if needed
     if hasattr(prompt_vec, 'tolist'):
         prompt_vec = prompt_vec.tolist()
 
-    # Single comparison against precomputed centroid
-    score = cosine_similarity(prompt_vec, DOMAIN_CENTROID)
-
-    # If similarity is too low, it's off-topic
+    score = cosine_similarity(prompt_vec, centroid)
     return score >= DOMAIN_THRESHOLD, score
