@@ -1,0 +1,14 @@
+streamlit>=1.30.0
+requests>=2.31.0
+sentence-transformers>=2.3.1
+numpy>=1.26.0,<2.0.0
+spacy>=3.7.0
+diagrams>=0.23.0
+python-dotenv>=1.0.0
+python-json-logger>=2.0.7
+pydantic-settings>=2.0.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+httpx>=0.26.0
+pytest>=8.0.0
+faiss-cpu>=1.7.4

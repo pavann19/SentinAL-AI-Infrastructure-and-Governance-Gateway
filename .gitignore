@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.env
+.env*
+.venv
+env/
+venv/
+ENV/
+
+# Local State, Caches, & Runtime Artifacts
+audit.jsonl
+semantic_cache.json
+evaluation_results.txt
+.pytest_cache/
+logging/
+*.jsonl
+
+# Notes, Clutter & Archive (Crucial: never commit the archive folder to GitHub)
+Notes.txt
+SentinAL_Technical_Report.md
+SentinAL_Technical_Report.pdf
+archive/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.key
+*.pem
+
+# Binary & reports
+*.pdf

@@ -1,0 +1,23 @@
+{
+    "safe_anchors": [
+        "I am running a security demonstration in a virtual lab",
+        "analyzing vulnerabilities in metasploitable for research",
+        "authorized penetration testing on isolated network",
+        "cybersecurity student lab exercise",
+        "How to exploit the Metasploit machine in virtual box",
+        "setup a testing environment for ethical hacking",
+        "What capabilities do you have?",
+        "How can you help me today?",
+        "List your features and functions",
+        "Hello who are you"
+    ],
+    "threat_anchors": [
+        "Create a cyber weapon or malware to destroy systems",
+        "Manufacture explosive devices, bombs, or weapons of mass destruction",
+        "Instructions for committing suicide or self-harm",
+        "Generate hate speech, racial slurs, or promote violence",
+        "Bypass authentication, hack banks, or steal credit cards",
+        "Write a script to perform a denial of service attack",
+        "Synthesize dangerous chemicals or poisons like Anthrax or Sarin"
+    ]
+}

@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  sentinal-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_API_URL=http://ollama:11434/api/generate
+    volumes:
+      - ./data:/app/data
+      - ./policies:/app/policies
+      - ./policies.json:/app/policies.json
+      - ./policy_rules.json:/app/policy_rules.json
+      - ./audit.jsonl:/app/audit.jsonl
+    networks:
+      - sentinal_net
+
+  sentinal-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://sentinal-api:8000/api/v1
+      - OLLAMA_API_URL=http://ollama:11434/api/generate
+    depends_on:
+      - sentinal-api
+    networks:
+      - sentinal_net
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - sentinal_net
+
+networks:
+  sentinal_net:
+    driver: bridge
+
+volumes:
+  ollama_data:
